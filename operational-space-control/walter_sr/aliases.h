@@ -2,7 +2,7 @@
 
 #include <Eigen/Dense>
 
-#include "operational-space-control/walter_sr_air/constants.h"
+#include "operational-space-control/walter_sr/constants.h"
 
 using namespace operational_space_controller::constants;
 

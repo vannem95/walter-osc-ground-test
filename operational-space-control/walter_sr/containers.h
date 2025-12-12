@@ -1,8 +1,8 @@
 #pragma once
 
-#include "operational-space-control/walter_sr_air/aliases.h"
-#include "operational-space-control/walter_sr_air/constants.h"
-#include "operational-space-control/walter_sr_air/autogen/autogen_defines.h"
+#include "operational-space-control/walter_sr/aliases.h"
+#include "operational-space-control/walter_sr/constants.h"
+#include "operational-space-control/walter_sr/autogen/autogen_defines.h"
 
 using namespace operational_space_controller::constants;
 using namespace operational_space_controller::aliases;

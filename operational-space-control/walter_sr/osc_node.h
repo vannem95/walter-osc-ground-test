@@ -33,13 +33,13 @@
 #include "walter_msgs/msg/wheel_motor_command.hpp"
 
 
-#include "operational-space-control/walter_sr_air/utilities.h"
+#include "operational-space-control/walter_sr/utilities.h"
 #include "operational-space-control/utilities.h"
-#include "operational-space-control/walter_sr_air/autogen/autogen_functions.h"
-#include "operational-space-control/walter_sr_air/autogen/autogen_defines.h"
-#include "operational-space-control/walter_sr_air/aliases.h"
-#include "operational-space-control/walter_sr_air/constants.h"
-#include "operational-space-control/walter_sr_air/containers.h"
+#include "operational-space-control/walter_sr/autogen/autogen_functions.h"
+#include "operational-space-control/walter_sr/autogen/autogen_defines.h"
+#include "operational-space-control/walter_sr/aliases.h"
+#include "operational-space-control/walter_sr/constants.h"
+#include "operational-space-control/walter_sr/containers.h"
 
 
 using namespace operational_space_controller::constants;
@@ -163,7 +163,7 @@ private:
     std::vector<int> contact_site_ids_;
     std::vector<int> body_ids_;
     Matrix<model::site_ids_size, 3> points_;
-    static constexpr bool is_fixed_based = true;
+    static constexpr bool is_fixed_based = false;
 
     // OSQP Solver, settings, and matrices
     OsqpInstance instance_;

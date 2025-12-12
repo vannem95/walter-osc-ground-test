@@ -5,7 +5,7 @@
 
 #include <Eigen/Dense>
 
-#include "operational-space-control/walter_sr_air/autogen/autogen_functions.h"
+#include "operational-space-control/walter_sr/autogen/autogen_functions.h"
 
 
 namespace {

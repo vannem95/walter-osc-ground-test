@@ -1,4 +1,4 @@
-#include "operational-space-control/walter_sr_air/osc_node.h"
+#include "operational-space-control/walter_sr/osc_node.h"
 
 // Your anonymous namespace with Casadi functions goes here.
 namespace {
@@ -65,8 +65,8 @@ OSCNode::OSCNode(const std::string& xml_path)
       Abox_(MatrixColMajor<optimization::design_vector_size, optimization::design_vector_size>::Identity()),
       dv_lb_(Vector<optimization::dv_size>::Constant(-infinity_)),
       dv_ub_(Vector<optimization::dv_size>::Constant(infinity_)),
-      u_lb_({-10, -10, -10, -10, -10, -10, -10, -10}),
-      u_ub_({10, 10, 10, 10, 10, 10, 10, 10}),
+      u_lb_({-6, -6, -6, -6, -6, -6, -6, -6}),
+      u_ub_({6, 6, 6, 6, 6, 6, 6, 6}),
       z_lb_({
           -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0,
           -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0}),
@@ -86,24 +86,24 @@ OSCNode::OSCNode(const std::string& xml_path)
     mj_model_->opt.timestep = 0.002;
     mj_data_ = mj_makeData(mj_model_);
 
-    mj_resetDataKeyframe(mj_model_, mj_data_, 0); // 
+    mj_resetDataKeyframe(mj_model_, mj_data_, 5); // 
     mj_forward(mj_model_, mj_data_); // Compute initial kinematics
     
     
     // Thighs: 0, 2, 4, 6 in the 8-DOF motor array.
     // They correspond to indices 7, 9, 11, 13 in the full mj_data_->qpos array.
     // initial_tlh_angular_position_ = mj_data_->qpos[7 + 0]; // Index 7 (Motor 0)
-    initial_tlh_angular_position_ = mj_data_->qpos[0 + 0]; // Index 7 (Motor 0)
-    initial_trh_angular_position_ = mj_data_->qpos[0 + 2]; // Index 9 (Motor 2)
-    initial_hlh_angular_position_ = mj_data_->qpos[0 + 4]; // Index 11 (Motor 4)
-    initial_hrh_angular_position_ = mj_data_->qpos[0 + 6]; // Index 13 (Motor 6)
+    initial_tlh_angular_position_ = mj_data_->qpos[7 + 0]; // Index 7 (Motor 0)
+    initial_trh_angular_position_ = mj_data_->qpos[7 + 2]; // Index 9 (Motor 2)
+    initial_hlh_angular_position_ = mj_data_->qpos[7 + 4]; // Index 11 (Motor 4)
+    initial_hrh_angular_position_ = mj_data_->qpos[7 + 6]; // Index 13 (Motor 6)
 
     // Shins: 1, 3, 5, 7 in the 8-DOF motor array.
     // They correspond to indices 8, 10, 12, 14 in the full mj_data_->qpos array.
-    initial_tl_angular_position_ = mj_data_->qpos[0 + 1]; // Index 8 (Motor 1)
-    initial_tr_angular_position_ = mj_data_->qpos[0 + 3]; // Index 10 (Motor 3)
-    initial_hl_angular_position_ = mj_data_->qpos[0 + 5]; // Index 12 (Motor 5)
-    initial_hr_angular_position_ = mj_data_->qpos[0 + 7]; // Index 14 (Motor 7)
+    initial_tl_angular_position_ = mj_data_->qpos[7 + 1]; // Index 8 (Motor 1)
+    initial_tr_angular_position_ = mj_data_->qpos[7 + 3]; // Index 10 (Motor 3)
+    initial_hl_angular_position_ = mj_data_->qpos[7 + 5]; // Index 12 (Motor 5)
+    initial_hr_angular_position_ = mj_data_->qpos[7 + 7]; // Index 14 (Motor 7)
 
     
     
@@ -137,6 +137,21 @@ OSCNode::OSCNode(const std::string& xml_path)
         bodies_.push_back(body_str);
         body_ids_.push_back(id);
     }
+
+    // SAFETY CHECK: Verify Site-Body Alignment
+    for (size_t i = 0; i < site_ids_.size(); i++) {
+        int site_id = site_ids_[i];
+        int body_id_from_list = body_ids_[i]; // The one from your generated list
+        int body_id_real = mj_model_->site_bodyid[site_id]; // The truth from MuJoCo
+
+        if (body_id_from_list != body_id_real) {
+            RCLCPP_FATAL(this->get_logger(), 
+                "MISMATCH at index %zu! Site '%s' is on Body %d, but List says Body %d", 
+                i, sites_[i].c_str(), body_id_real, body_id_from_list);
+            throw std::runtime_error("Kinematic Chain Mismatch");
+        }
+    }
+    
     assert(site_ids_.size() == body_ids_.size() && "Number of Sites and Bodies must be equal.");
 
     // --- Optimization Initialization ---
@@ -432,20 +447,116 @@ void OSCNode::timer_callback() {
 
 // ===============================================================================================================
 void OSCNode::update_mj_data(const State& current_state) {
-    Vector<model::nq_size> qpos = Vector<model::nq_size>::Zero();
-    Vector<model::nv_size> qvel = Vector<model::nv_size>::Zero();
+    // =========================================================================
+    // PART 1: PREPARE POSITION (QPOS)
+    // =========================================================================
+    
+    // 1. Map Body Orientation (IMU) -> qpos[3-6]
+    // MuJoCo Quaternion order: [w, x, y, z] - imu uses x y z w
+    mj_data_->qpos[3] = current_state.body_rotation(3); // w
+    mj_data_->qpos[4] = current_state.body_rotation(0); // x
+    mj_data_->qpos[5] = current_state.body_rotation(1); // y
+    mj_data_->qpos[6] = current_state.body_rotation(2); // z
 
-    qpos << current_state.motor_position;
-    qvel << current_state.motor_velocity;
+    // Safety: Handle zero quaternion
+    if (current_state.body_rotation.norm() < 1e-6) {
+        mj_data_->qpos[3] = 1.0; 
+    }
 
-    mj_data_->qpos = qpos.data();
-    mj_data_->qvel = qvel.data();
+    // 2. Map Motor Positions -> qpos[7...]
+    // Note: Adjust indices if your robot has fewer/more joints
+    for (int i = 0; i < model::nu_size; ++i) {
+        mj_data_->qpos[7 + i] = current_state.motor_position(i);
+    }
 
+    // 3. Reset Body Position to (0,0,0) for "Probing"
+    mj_data_->qpos[0] = 0.0;
+    mj_data_->qpos[1] = 0.0;
+    mj_data_->qpos[2] = 0.0;
+
+    // =========================================================================
+    // PART 2: ANCHORING LOGIC (Find Body Position)
+    // =========================================================================
+    
+    // Run Kinematics on the "Probed" state
     mj_fwdPosition(mj_model_, mj_data_);
-    mj_fwdVelocity(mj_model_, mj_data_);
 
-    points_ = Eigen::Map<Matrix<model::site_ids_size, 3>>(mj_data_->site_xpos)(site_ids_, Eigen::placeholders::all);
+    double sum_active_x = 0.0;
+    double sum_active_y = 0.0;
+    double lowest_foot_z = 100.0;
+    int active_feet_count = 0;
+
+    // A. Find absolute floor height
+    for (int id : contact_site_ids_) { 
+        double z = mj_data_->site_xpos[3 * id + 2];
+        if (z < lowest_foot_z) lowest_foot_z = z;
+    }
+
+    // B. Average the active feet
+    const double CONTACT_THRESHOLD = 0.01;
+    for (int id : contact_site_ids_) { 
+        double x = mj_data_->site_xpos[3 * id + 0];
+        double y = mj_data_->site_xpos[3 * id + 1];
+        double z = mj_data_->site_xpos[3 * id + 2];
+
+        // If foot is near the floor, use it for support center
+        if (std::abs(z - lowest_foot_z) <= CONTACT_THRESHOLD) {
+            sum_active_x += x;
+            sum_active_y += y;
+            active_feet_count++;
+        }
+    }
+
+    // C. Invert the vector (If feet are at X, Body must be at -X)
+    double real_body_x = 0.0;
+    double real_body_y = 0.0;
+    
+    if (active_feet_count > 0) {
+        real_body_x = -(sum_active_x / active_feet_count);
+        real_body_y = -(sum_active_y / active_feet_count);
+    }
+
+    double real_body_z = std::clamp(-lowest_foot_z, 0.10, 0.80); 
+
+    // D. Apply calculated Body Position
+    mj_data_->qpos[0] = real_body_x;
+    mj_data_->qpos[1] = real_body_y;
+    mj_data_->qpos[2] = real_body_z;
+
+    // =========================================================================
+    // PART 3: PREPARE VELOCITY (QVEL) - CRITICAL!
+    // =========================================================================
+    
+    // 1. Linear Body Velocity (From estimator, or 0 if unknown)
+    mj_data_->qvel[0] = current_state.linear_body_velocity(0);
+    mj_data_->qvel[1] = current_state.linear_body_velocity(1);
+    mj_data_->qvel[2] = current_state.linear_body_velocity(2);
+
+    // 2. Angular Body Velocity (From IMU Gyro)
+    mj_data_->qvel[3] = current_state.angular_body_velocity(0);
+    mj_data_->qvel[4] = current_state.angular_body_velocity(1);
+    mj_data_->qvel[5] = current_state.angular_body_velocity(2);
+
+    // 3. Motor Velocities
+    for (int i = 0; i < model::nu_size; ++i) {
+        mj_data_->qvel[6 + i] = current_state.motor_velocity(i);
+    }
+
+    // =========================================================================
+    // PART 4: FINAL COMPUTATION
+    // =========================================================================
+    
+    // Update Jacobians (mj_jac) and Mass Matrix (qM) with the FULL correct state
+    mj_fwdPosition(mj_model_, mj_data_);
+    mj_fwdVelocity(mj_model_, mj_data_); 
+    
+    // Update site positions for your controller's use
+    points_ = Eigen::Map<Matrix<model::site_ids_size, 3, Eigen::RowMajor>>(
+        mj_data_->site_xpos)(site_ids_, Eigen::placeholders::all);
 }
+
+
+
 // ===============================================================================================================
 void OSCNode::update_osc_data() {
     Matrix<model::nv_size, model::nv_size> mass_matrix = Matrix<model::nv_size, model::nv_size>::Zero();
@@ -628,7 +739,7 @@ void OSCNode::publish_torque_command(bool safety_override_active_local,
         "rear_left_hip", "rear_left_knee", "rear_right_hip", "rear_right_knee",
         "front_left_hip", "front_left_knee", "front_right_hip", "front_right_knee"};
     
-    const double MAX_TORQUE = 5.0;
+    const double MAX_TORQUE = 6.0;
     const int TORQUE_CONTROL_MODE = 1; 
     const int VELOCITY_CONTROL_MODE = 2; 
 
