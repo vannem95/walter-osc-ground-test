@@ -551,7 +551,7 @@ void OSCNode::update_mj_data(const State& current_state) {
     mj_fwdVelocity(mj_model_, mj_data_); 
     
     // Update site positions for your controller's use
-    points_ = Eigen::Map<Matrix<model::site_ids_size, 3, Eigen::RowMajor>>(
+    points_ = Eigen::Map<Matrix<model::site_ids_size, 3>>(
         mj_data_->site_xpos)(site_ids_, Eigen::placeholders::all);
 }
 
