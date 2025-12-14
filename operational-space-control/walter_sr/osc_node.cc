@@ -65,8 +65,8 @@ OSCNode::OSCNode(const std::string& xml_path)
       Abox_(MatrixColMajor<optimization::design_vector_size, optimization::design_vector_size>::Identity()),
       dv_lb_(Vector<optimization::dv_size>::Constant(-infinity_)),
       dv_ub_(Vector<optimization::dv_size>::Constant(infinity_)),
-      u_lb_({-6, -6, -6, -6, -6, -6, -6, -6}),
-      u_ub_({6, 6, 6, 6, 6, 6, 6, 6}),
+      u_lb_({-10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0}),
+      u_ub_({10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0}),
       z_lb_({
           -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0,
           -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0, -infinity_, -infinity_, 0.0}),
@@ -361,13 +361,13 @@ void OSCNode::timer_callback() {
         // 2b. Define Targets and Calculate DDQ Commands
 
         // Sim - on ground
-        // shin - (kp - 80*100 — kd - 80*10)
+        // shin - (kp - 80*100 — kd - 80*10) 200/20, 300/30
         double shin_factor = 3.0;
-        double shin_kp = 100.0*shin_factor; double shin_kv = 10.0*shin_factor;
+        double shin_kp = 400.0; double shin_kv = 20.0;
 
-        // thigh - (kp - 10*100 — kd - 10*10)
+        // thigh - (kp - 10*100 — kd - 10*10) 200/20
         double thigh_factor = 2.0;
-        double thigh_kp = 100.0*thigh_factor; double thigh_kv = 10.0*thigh_factor;
+        double thigh_kp = 400.0; double thigh_kv = 20.0;
 
         double shin_pos_target = 0.0;
         double thigh_pos_target = 0.55; 
@@ -739,7 +739,7 @@ void OSCNode::publish_torque_command(bool safety_override_active_local,
         "rear_left_hip", "rear_left_knee", "rear_right_hip", "rear_right_knee",
         "front_left_hip", "front_left_knee", "front_right_hip", "front_right_knee"};
     
-    const double MAX_TORQUE = 6.0;
+    const double MAX_TORQUE = 10.0;
     const int TORQUE_CONTROL_MODE = 1; 
     const int VELOCITY_CONTROL_MODE = 2; 
 
