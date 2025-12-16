@@ -405,7 +405,49 @@ void OSCNode::timer_callback() {
 
         // --- TIMING POINT C: END CASADI/OSQP DATA, START SOLVE ---
         auto t_start_solve = std::chrono::high_resolution_clock::now();
+
+
         
+        // --- DEBUGGING BLOCK: PRINT SOLVER STATE ---
+        // Print only once per second to avoid flooding console
+        // static auto last_print_time = std::chrono::steady_clock::now();
+        // auto now = std::chrono::steady_clock::now();
+        // if (std::chrono::duration_cast<std::chrono::seconds>(now - last_print_time).count() >= 1) {
+            // last_print_time = now;
+
+        std::stringstream ss;
+        ss << "\n--- OSC STATE DEBUG ---\n";
+        
+        // 1. Check if solver thinks feet are touching ground
+        ss << "Contact Mask: [ ";
+        for(int i=0; i<model::contact_site_ids_size; ++i) ss << local_state.contact_mask(i) << " ";
+        ss << "]\n";
+
+        // 2. Check estimated robot mass (from qM)
+        // Trace of upper-left 3x3 of Mass Matrix roughly correlates to mass
+        double approx_mass = osc_data_.mass_matrix(0,0); 
+        ss << "Mass Matrix (0,0): " << approx_mass << " (Should be ~total robot mass)\n";
+
+        // 3. Check qpos (Altitude)
+        ss << "Torso Height (qpos[2]): " << mj_data_->qpos[2] << "\n";
+
+        // 4. Check Orientation
+        ss << "Torso Quat (w,x,y,z): " << mj_data_->qpos[3] << ", " << mj_data_->qpos[4] 
+        << ", " << mj_data_->qpos[5] << ", " << mj_data_->qpos[6] << "\n";
+
+        // 5. Check Gravity Vector (qfrc_bias)
+        // The first 3 elements of qfrc_bias should be approx [0, 0, mass*9.81]
+        ss << "Gravity/Bias Force (0-2): " 
+        << osc_data_.coriolis_matrix(0) << ", " 
+        << osc_data_.coriolis_matrix(1) << ", " 
+        << osc_data_.coriolis_matrix(2) << "\n";
+
+        RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
+        // }
+        // -------------------------------------------
+        
+
+
         // OLD: solve_optimization();
         // NEW: Check result
         bool solver_success = solve_optimization();
@@ -453,10 +495,10 @@ void OSCNode::update_mj_data(const State& current_state) {
     
     // 1. Map Body Orientation (IMU) -> qpos[3-6]
     // MuJoCo Quaternion order: [w, x, y, z] - imu uses x y z w
-    mj_data_->qpos[3] = current_state.body_rotation(3); // w
-    mj_data_->qpos[4] = current_state.body_rotation(0); // x
-    mj_data_->qpos[5] = current_state.body_rotation(1); // y
-    mj_data_->qpos[6] = current_state.body_rotation(2); // z
+    mj_data_->qpos[3] = current_state.body_rotation(0); // w
+    mj_data_->qpos[4] = current_state.body_rotation(1); // x
+    mj_data_->qpos[5] = current_state.body_rotation(2); // y
+    mj_data_->qpos[6] = current_state.body_rotation(3); // z
 
     // Safety: Handle zero quaternion
     if (current_state.body_rotation.norm() < 1e-6) {
