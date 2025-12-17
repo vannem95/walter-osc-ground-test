@@ -429,11 +429,29 @@ void OSCNode::timer_callback() {
         ss << "Mass Matrix (0,0): " << approx_mass << " (Should be ~total robot mass)\n";
 
         // 3. Check qpos (Altitude)
+        ss << "Torso x (qpos[0]): " << mj_data_->qpos[0] << "\n";
+        ss << "Torso y (qpos[1]): " << mj_data_->qpos[1] << "\n";
         ss << "Torso Height (qpos[2]): " << mj_data_->qpos[2] << "\n";
 
         // 4. Check Orientation
         ss << "Torso Quat (w,x,y,z): " << mj_data_->qpos[3] << ", " << mj_data_->qpos[4] 
         << ", " << mj_data_->qpos[5] << ", " << mj_data_->qpos[6] << "\n";
+
+        // 3. Joint Angles (Motors)
+        // These start at index 7 for a Floating Base robot
+        ss << "Motor Angles (Rad):  [ ";
+        for (int i = 0; i < model::nu_size; ++i) {
+            ss << mj_data_->qpos[7 + i] << " ";
+        }
+        ss << "]\n";
+
+        // 4. Joint Velocities (qvel) - Optional but useful
+        // Note: qvel is different. [0-2] Linear, [3-5] Angular, [6+] Joints
+        ss << "Motor Velocities:    [ ";
+        for (int i = 0; i < model::nu_size; ++i) {
+            ss << mj_data_->qvel[6 + i] << " ";
+        }
+        ss << "]\n";      
 
         // 5. Check Gravity Vector (qfrc_bias)
         // The first 3 elements of qfrc_bias should be approx [0, 0, mass*9.81]
