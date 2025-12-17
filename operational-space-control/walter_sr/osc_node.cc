@@ -833,6 +833,15 @@ void OSCNode::publish_torque_command(bool safety_override_active_local,
         
         Vector<model::nu_size> osc_torque = solution_(Eigen::seqN(optimization::dv_idx, optimization::u_size));
 
+        std::stringstream ss;
+        ss << "OSC Torques: [ ";
+        for (size_t i = 0; i < model::nu_size; ++i) {
+            ss << std::fixed << std::setprecision(2) << osc_torque(i) << " ";
+        }
+        ss << "]";
+        RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
+        
+
         for (size_t i = 0; i < model::nu_size; ++i) {
             double final_torque = osc_torque(i);
             
